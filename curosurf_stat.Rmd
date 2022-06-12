@@ -1,0 +1,164 @@
+---
+title: "CUROSURF"
+subtitle: "Quelques chiffres"
+thanks: "Suzi  MANSOUR - Réanimation néonatale"
+author: "Philippe MICHEL"
+date: "`r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    latex_engine: lualatex
+    toc: yes
+    number_sections: no
+    keep_tex: yes
+    df_print: kable
+    highlight: tango
+  html_document:
+    toc: yes
+    df_print: paged
+documentclass: scrartcl
+mainfont: Adobe Garamond Pro
+mainfontoptions:
+- Ligatures = Common
+- Ligatures = Rare
+- Style = Swash
+sansfont: Trajan Pro
+monofont: Source Sans Pro
+mathfont: Source Sans Pro
+monofontoptions: Numbers = Monospaced
+mathfontoptions: Numbers = Monospaced
+colorlinks: yes
+fontsize: 10pt
+papersize: a4
+lang: fr
+cite-method: biblatex
+bibliography: stat.bib
+license: CC BY-SA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FALSE) 
+```
+
+```{r lib}
+library(Hmisc)
+library(baseph)
+library(tidyverse)
+library(knitr)
+library(epiDisplay)
+library(kableExtra)
+library(gtsummary)
+```
+
+```{r import}
+tt <- debutph("data/cortico.csv")
+tt$nombre.dose.de.curosurf <- as.factor(tt$nombre.dose.de.curosurf)
+```
+
+## Description de la population
+
+```{r desc}
+tbl_summary(tt[,c(2:7,9:23)], by = corticotherapie.an) |> 
+ add_p() |> 
+modify_spanning_header(c("stat_1", "stat_2") ~ "Corticoïdes") |> 
+modify_caption("Tableau descriptif") |> 
+bold_labels() |> 
+add_overall() %>%
+bold_p()
+```
+
+Seul le critère `audipog` semble différent dans les deux branches (Attention ! Vu le grand nombre de comparaison un test faussement positif est possible).
+
+## Critère principal
+
+le critère principal est le nombre de doses de surfactant (Curosurf©) reçues (1 dose vs deux doses ou plus) selon le traitement corticoïde reçu avant l'accouchement (une dose vs deux doses).
+
+```{r principal}
+zz <- cc(tt$nombre.dose.de.curosurf,tt$corticotherapie.an)
+print(zz)
+```
+
+Il n'y a pas de différence significative entre les deux groupes concernant le critère principal.
+
+### Facteurs explicatifs
+
+On recherche des facteurs autres pouvant influer sur le nombre de dose de surfactant reçues.
+
+```{r princ1}
+tbl_summary(tt[,c(2:6,8:26)], by = nombre.dose.de.curosurf) |> 
+ add_p() |> 
+modify_spanning_header(c("stat_1", "stat_2") ~ "Doses de surfactants") |> 
+modify_caption("Facteurs autres") |> 
+bold_labels() |> 
+add_overall() |> 
+bold_p()
+```
+
+ Le terme, la gravité en salle de naissance (intubation, réanimation...) ou le score MMH plus grave  semblent influer la doses de surfactant reçue.
+ 
+ #### Analyse multivariée
+ 
+ On garde pour cette analyse en régression logistique tous les items ayant une p-value < 20% & bien sûr la dose de corticoïdes antenatale.  Le meilleur modèle sera ensuite recherché par  un step-by-step descendant.
+ 
+ 
+```{r multi}
+ll <- glm(formula = nombre.dose.de.curosurf ~ corticotherapie.an + 
+    terme + imf + nbre.intubations + stade.radio.mmh, family = "quasibinomial", data = tt)
+
+ tbl_regression(ll,
+    exponentiate = TRUE, 
+  ) |> 
+bold_p() %>%
+  bold_labels() |> 
+   modify_caption("Facteurs de risque - Analyse multivariée") 
+```
+ 
+ Aucun des items étudié ne semble influer le nombre de doses de surfactant.
+ 
+## Critères secondaires
+
+### Intervalle entre la dernière dose de corticothérapie
+*Observer l’impact de l’intervalle entre la dernière dose de corticothérapie anténatale et la naissance sur la sévérité de la MMH.*
+
+Donnée manquante.
+
+
+### Prématurité/MMH
+*Observer l’influence de la cause de prématurité sur la sévérité de la MMH.*
+
+```{r pmmh}
+# zz <- chisq.test(tt$cause.de.prematurite,tt$stade.radio.mmh)
+```
+
+Calcul impossible. Revoir les valeurs possibles des causes de prématurité.
+
+### Corticothérapie anténatale/postnatale
+*Observer l’impact du nombre de doses de corticothérapie anténatale sur l’usage de corticothérapie postnatale.*
+
+```{r antepost}
+cc(tt$corticotherapie.post.natale,tt$corticotherapie.an)
+```
+Pas d'influence.
+
+### Dysplasie bronchopulmonaire
+*Observer l’impact du nombre de doses de corticothérapie anténatale sur la prévalence de dysplasie bronchopulmonaire.*
+
+```{r antdbp}
+cc(tt$dbp,tt$corticotherapie.an)
+```
+Pas d'influence.
+
+
+### Hémorragie intraventriculaire
+*Observer l’impact du nombre de doses de corticothérapie anténatale sur la sévérité de l’hémorragie intraventriculaire.*
+
+
+```{r anthem}
+cc(tt$hemorragie.pulmonaire ,tt$corticotherapie.an)
+```
+
+Significatibilité faible.
+
+## Technique {.appendix}
+
+Les données discrètes ont été présentés en pourcentage puis comparées par le test du $\Chi^2$ de Pearson avec correction de Yates si nécessaire. Les données numériques ont été présentées par leur médiane & les quartiles puis comparées par le test non paramétrique de Wilcoxon. 
+L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy] & `epiDisplay` [@epid].
