@@ -1,10 +1,13 @@
 ---
-title: "CUROSURF"
+title: "Cortico Anténatale et surfactant"
 subtitle: "Quelques chiffres"
 thanks: "Suzi  MANSOUR - Réanimation néonatale"
 author: "Philippe MICHEL"
 date: "`r format(Sys.Date(), '%d %b %Y')`"
 output:
+  html_document:
+    toc: yes
+    df_print: paged
   pdf_document:
     latex_engine: lualatex
     toc: yes
@@ -12,9 +15,6 @@ output:
     keep_tex: yes
     df_print: kable
     highlight: tango
-  html_document:
-    toc: yes
-    df_print: paged
 documentclass: scrartcl
 mainfont: Adobe Garamond Pro
 mainfontoptions:
@@ -40,6 +40,7 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FA
 ```
 
 ```{r lib}
+library(forcats)
 library(Hmisc)
 library(baseph)
 library(tidyverse)
@@ -47,65 +48,291 @@ library(knitr)
 library(epiDisplay)
 library(kableExtra)
 library(gtsummary)
+library(ggsci)
+library(lme4)
+library(lmerTest)
 ```
 
 ```{r import}
-tt <- debutph("data/cortico.csv")
-tt$nombre.dose.de.curosurf <- as.factor(tt$nombre.dose.de.curosurf)
+rm(tt)
+tt <- debutph("data/cortico3.csv")
+tt$intervalle.cortico.accouchement <-
+  fct_relevel(tt$intervalle.cortico.accouchement,
+              c("< 12 H", "entre 12 H et 24H", "> 24 H"))
+tt$imf <-
+  fct_relevel(tt$imf, c("non", "Suspectée", "Confirmée"))
+#
+tt$cut.terme <- cut(
+    tt$terme,
+    c(0, 27.9, 32, 35),
+    c("très grande prématurité", "grande prématurité","prématurité moyenne")) |> 
+fct_relevel(c( "prématurité moyenne", "grande prématurité", "très grande prématurité"))
+#
+tt$cause.prematurite <- fct_relevel(tt$cause.prematurite, c("spontanée", "ARCF", "Pré éclampsie", "autre"))
+#
+tt$hiv<- fct_relevel(tt$hiv, c("non","grade 1", "grade 2" ,"grade 3" ,"grade 4" ))
 ```
 
 ## Description de la population
 
 ```{r desc}
-tbl_summary(tt[,c(2:7,9:23)], by = corticotherapie.an) |> 
- add_p() |> 
-modify_spanning_header(c("stat_1", "stat_2") ~ "Corticoïdes") |> 
-modify_caption("Tableau descriptif") |> 
-bold_labels() |> 
-add_overall() %>%
-bold_p()
+tbl_summary(tt[, c(2:7, 9,35,10:23)], by = corticotherapie.an) |>
+  add_p() |>
+  modify_spanning_header(c("stat_1", "stat_2") ~ "Corticoïdes antenatal") |>
+  modify_caption("Tableau descriptif") |>
+  bold_labels() |>
+  add_overall() %>%
+  bold_p() |>
+  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
 ```
 
-Seul le critère `audipog` semble différent dans les deux branches (Attention ! Vu le grand nombre de comparaison un test faussement positif est possible).
+
+
+
+
+```{r pbterme}
+zz <- fisher.test(tt$corticotherapie.an,tt$cut.terme)
+zzp <- beaup(zz$p.value)
+titre <- "Dose de corticoïdes anténatale selon le terme"
+tt |> 
+  ggplot() +
+  aes(fill = corticotherapie.an, x= cut.terme) |> 
+  geom_bar(stat = "count", position = "fill") +
+        labs(title = titre,
+         subtitle = zzp,
+         x = "",
+         y = "%",
+         caption = titre,
+         label = "princi1") +
+      theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_blank(),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
+
 
 ## Critère principal
 
 le critère principal est le nombre de doses de surfactant (Curosurf©) reçues (1 dose vs deux doses ou plus) selon le traitement corticoïde reçu avant l'accouchement (une dose vs deux doses).
 
+
+**Problème** : le nombre de doses reçues en anténatal est lié au terme & au score AUDIPOG. 
+
 ```{r principal}
-zz <- cc(tt$nombre.dose.de.curosurf,tt$corticotherapie.an)
+zz <- cc(tt$nb.dose.curosurf,tt$corticotherapie.an)
 print(zz)
 ```
 
 Il n'y a pas de différence significative entre les deux groupes concernant le critère principal.
+
+```{r gprinci1}
+zz <- fisher.test(tt$corticotherapie.an,tt$nb.dose.curosurf)
+zzp <- beaup(zz$p.value)
+titre <- "Doses de surfactant selon la corticothérapie anténatale"
+tt |> 
+  ggplot() +
+  aes(x= corticotherapie.an, fill = nb.dose.curosurf) +
+  geom_bar(stat = "count", position = "fill") +
+      labs(title = titre,
+         subtitle = zzp,
+         x = "Corticothérapie anténatale",
+         y = "%",
+         caption = titre,
+         label = "princi1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
+
 
 ### Facteurs explicatifs
 
 On recherche des facteurs autres pouvant influer sur le nombre de dose de surfactant reçues.
 
 ```{r princ1}
-tbl_summary(tt[,c(2:6,8:26)], by = nombre.dose.de.curosurf) |> 
+tbl_summary(tt[,c(2:6,8:26)], by = nb.dose.curosurf) |> 
  add_p() |> 
 modify_spanning_header(c("stat_1", "stat_2") ~ "Doses de surfactants") |> 
 modify_caption("Facteurs autres") |> 
 bold_labels() |> 
-add_overall() |> 
-bold_p()
+add_overall(col_label ="**Total** (N = {N})") |> 
+bold_p() |> 
+  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
 ```
 
- Le terme, la gravité en salle de naissance (intubation, réanimation...) ou le score MMH plus grave  semblent influer la doses de surfactant reçue.
+ Le terme, La présence d'une IMF, la gravité en salle de naissance (intubation, réanimation...) ou le score MMH plus grave semblent influer la dose de surfactant reçue.
  
- #### Analyse multivariée
+```{r gterme1}
+zz <- fisher.test(tt$terme,tt$nb.dose.curosurf)
+zzp <- beaup(zz$p.value)
+titre <- "Doses de surfactant selon le terme"
+tt |> 
+  ggplot() +
+  aes (x = nb.dose.curosurf, y = terme, fill = nb.dose.curosurf) +
+  geom_violin() +
+  geom_boxplot(width = 0.2, fill = "white") +
+
+      labs(title = titre,
+         subtitle = zzp,
+         x = "IMF",
+         y = "%",
+         caption = titre,
+         label = "imf1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
+
+```{r gterme2}
+zz <- fisher.test(tt$cut.terme,tt$nb.dose.curosurf)
+zzp <- beaup(zz$p.value)
+titre <- "Doses de surfactant selon le terme"
+tt |> 
+  ggplot() +
+  aes(x= cut.terme, fill = nb.dose.curosurf) +
+  geom_bar(stat = "count", position = "fill") +
+      labs(title = titre,
+         subtitle = zzp,
+         y = "%",
+         caption = titre,
+         label = "princi1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_blank(),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
  
- On garde pour cette analyse en régression logistique tous les items ayant une p-value < 20% & bien sûr la dose de corticoïdes antenatale.  Le meilleur modèle sera ensuite recherché par  un step-by-step descendant.
+```{r gauddipog1}
+titre <- "Doses de surfactant selon le score AUDIPOG"
+zz <- wilcox.test(tt$audipog~tt$nb.dose.curosurf)
+zzp <- beaup(zz$p.value)
+tt |> 
+  ggplot() + 
+  aes (x = nb.dose.curosurf, y = audipog, fill = nb.dose.curosurf) +
+  geom_violin() +
+  geom_boxplot(width = 0.2, fill = "white") +
+        labs(title = titre,
+         subtitle = zzp,
+         x = "IMF",
+         y = "%",
+         caption = titre,
+         label = "audipog1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
+ 
+ 
+ 
+ 
+```{r gimf1}
+zz <- fisher.test(tt$imf,tt$nb.dose.curosurf)
+zzp <- beaup(zz$p.value)
+titre <- "Doses de surfactant selon la présence d'une IMF"
+tt |> 
+  ggplot() +
+  aes(x= imf, fill = nb.dose.curosurf) +
+  geom_bar(stat = "count", position = "fill") +
+      labs(title = titre,
+         subtitle = zzp,
+         x = "IMF",
+         y = "%",
+         caption = titre,
+         label = "imf1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
+ 
+### Analyse multivariée
+ 
+ On garde pour cette analyse en régression logistique tous les items ayant une p-value < 20% & bien sûr la dose de corticoïdes anténatale.  Le meilleur modèle sera ensuite recherché par  un step-by-step descendant.
  
  
 ```{r multi}
-ll <- glm(formula = nombre.dose.de.curosurf ~ corticotherapie.an + 
-    terme + imf + nbre.intubations + stade.radio.mmh, family = "quasibinomial", data = tt)
+ll <- glm(formula = nb.dose.curosurf ~ corticotherapie.an + cause.de.prematurite + 
+    cut.terme + imf , family = "quasibinomial", data = tt)
 
  tbl_regression(ll,
-    exponentiate = TRUE, 
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+    estimate_fun = ~style_ratio(.x, digits = 2)
   ) |> 
 bold_p() %>%
   bold_labels() |> 
@@ -118,47 +345,147 @@ bold_p() %>%
 
 ### Intervalle entre la dernière dose de corticothérapie
 *Observer l’impact de l’intervalle entre la dernière dose de corticothérapie anténatale et la naissance sur la sévérité de la MMH.*
-
+            
 Donnée manquante.
 
 
 ### Prématurité/MMH
+
 *Observer l’influence de la cause de prématurité sur la sévérité de la MMH.*
 
 ```{r pmmh}
-# zz <- chisq.test(tt$cause.de.prematurite,tt$stade.radio.mmh)
+zz <- chisq.test(tt$cause.de.prematurite,tt$stade.radio.mmh)
+zzp <- beaup(zz$p.value)
 ```
 
-Calcul impossible. Revoir les valeurs possibles des causes de prématurité.
+Non significatif (`r zzp`). Mais il y a trop de niveaux (tableau 4 * 4) pour l'effectif donc peu fiable.
+
+```{r gmmh1}
+titre <- "Stade MMH selon la cause de prématurité"
+tt |> 
+  ggplot() +
+  aes(x= cause.de.prematurite, fill = stade.radio.mmh) +
+  geom_bar(stat = "count", position = "fill") +
+      labs(title = titre,
+         subtitle = zzp,
+         x = "Cause de la prématurité",
+         y = "%",
+         caption = titre,
+         label = "imf1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
 
 ### Corticothérapie anténatale/postnatale
+
 *Observer l’impact du nombre de doses de corticothérapie anténatale sur l’usage de corticothérapie postnatale.*
 
 ```{r antepost}
-cc(tt$corticotherapie.post.natale,tt$corticotherapie.an)
+zz <- fisher.test(tt$corticotherapie.an,tt$corticotherapie.post.natale)
+zzp <- beaup(zz$p.value)
 ```
-Pas d'influence.
+Pas d'influence (`r zzp`).
+
+```{r gantepost}
+titre <- "Corticothérapie postnatale vs anténatale"
+barouiph(
+  tt$corticotherapie.post.natale,
+  tt$corticotherapie.an,
+  titre = "Corticothérapie anténatale & postnatale",
+  stitre = zzp,
+  ytitre = "% corticothérapie postnatale",
+  lab = "pbp",
+  capt = "Corticothérapie anténatale & postnatale"
+)
+```
+
 
 ### Dysplasie bronchopulmonaire
 *Observer l’impact du nombre de doses de corticothérapie anténatale sur la prévalence de dysplasie bronchopulmonaire.*
 
-```{r antdbp}
-cc(tt$dbp,tt$corticotherapie.an)
+```{r dbp}
+zz <- fisher.test(tt$corticotherapie.an,tt$dbp)
+zzp <- beaup(zz$p.value)
 ```
-Pas d'influence.
+Pas d'influence (`r zzp`).
+
+```{r gdbp}
+barouiph(
+  tt$dbp,
+  tt$corticotherapie.an,
+  titre = "Dysplasie bronchopulmonaire & corticothérapie anténatale",
+  stitre = zzp,
+  ytitre = "% dysplasie bronchopulmonaire",
+  lab = "pbp",
+  capt = "Dysplasie bronchopulmonaire & corticothérapie anténatale"
+)
+```
+
 
 
 ### Hémorragie intraventriculaire
 *Observer l’impact du nombre de doses de corticothérapie anténatale sur la sévérité de l’hémorragie intraventriculaire.*
 
-
-```{r anthem}
-cc(tt$hemorragie.pulmonaire ,tt$corticotherapie.an)
+```{r hiv}
+zz <- fisher.test(tt$corticotherapie.an,tt$hiv)
+zzp <- beaup(zz$p.value)
 ```
 
-Significatibilité faible.
+Pas d'influence (`r zzp`).
+
+```{r ghiv}
+titre <-"Hémorragie intraventriculaire vs corticothérapie anté natale"
+tt |> 
+  dplyr::filter(!is.na(hiv)) |> 
+  ggplot() +
+  aes(x= corticotherapie.an, fill = hiv) +
+  geom_bar(stat = "count", position = "fill") +
+      labs(title = titre,
+         subtitle = zzp,
+         x = "Cause de la prématurité",
+         y = "%",
+         caption = titre,
+         label = "imf1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+
+```
+
+
+
 
 ## Technique {.appendix}
 
 Les données discrètes ont été présentés en pourcentage puis comparées par le test du $\Chi^2$ de Pearson avec correction de Yates si nécessaire. Les données numériques ont été présentées par leur médiane & les quartiles puis comparées par le test non paramétrique de Wilcoxon. 
-L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy] & `epiDisplay` [@epid].
+
+L'analyse multivarié a été menée en régression logistique. Les conditions d'utilisation d'une loi binomiale (distribution normale des résidus) n'étant pas remplies une loi quasi-binomiale a été utilisée. 
+
+L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy], `lme4` [@lme4] & `epiDisplay` [@epid].
