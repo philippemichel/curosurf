@@ -1,10 +1,10 @@
 ---
 title: "Cortico Anténatale et surfactant"
-subtitle: "Quelques chiffres"
-thanks: "Suzi  MANSOUR - Réanimation néonatale"
 author: "Philippe MICHEL"
 date: "`r format(Sys.Date(), '%d %b %Y')`"
 output:
+  word_document:
+    toc: yes
   html_document:
     toc: yes
     df_print: paged
@@ -15,6 +15,8 @@ output:
     keep_tex: yes
     df_print: kable
     highlight: tango
+thanks: Suzi  MANSOUR - Réanimation néonatale
+subtitle: Quelques chiffres
 documentclass: scrartcl
 mainfont: Adobe Garamond Pro
 mainfontoptions:
@@ -30,9 +32,12 @@ colorlinks: yes
 fontsize: 10pt
 papersize: a4
 lang: fr
+lof: yes
+lot: yes
 cite-method: biblatex
 bibliography: stat.bib
 license: CC BY-SA
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -83,7 +88,15 @@ tbl_summary(tt[, c(2:7, 9,35,10:23)], by = corticotherapie.an) |>
   bold_labels() |>
   add_overall() %>%
   bold_p() |>
-  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
+  as_kable_extra(
+    escape = FALSE,
+    booktabs = TRUE,
+    longtable = TRUE
+  ) %>%
+  kableExtra::kable_styling(
+    position = "center",
+    latex_options = c("repeat_header")
+  )
 ```
 
 
@@ -185,9 +198,9 @@ bold_p() |>
   as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
 ```
 
- Le terme, La présence d'une IMF, la gravité en salle de naissance (intubation, réanimation...) ou le score MMH plus grave semblent influer la dose de surfactant reçue.
+ Le terme, la présence d'une IMF, la gravité en salle de naissance (intubation, réanimation...) ou le score MMH plus grave semblent influer la dose de surfactant reçue.
  
-```{r gterme1}
+```{r gterme1, fig.cap= "Doses de surfactant selon le terme (num)"}
 zz <- fisher.test(tt$terme,tt$nb.dose.curosurf)
 zzp <- beaup(zz$p.value)
 titre <- "Doses de surfactant selon le terme"
@@ -221,7 +234,7 @@ tt |>
     )
 ```
 
-```{r gterme2}
+```{r gterme2, fig.cap= "Doses de surfactant selon le terme"}
 zz <- fisher.test(tt$cut.terme,tt$nb.dose.curosurf)
 zzp <- beaup(zz$p.value)
 titre <- "Doses de surfactant selon le terme"
@@ -252,7 +265,7 @@ tt |>
     )
 ```
  
-```{r gauddipog1}
+```{r gauddipog1, fig.cap= "Doses de surfactant selon le score AUDIPOG"}
 titre <- "Doses de surfactant selon le score AUDIPOG"
 zz <- wilcox.test(tt$audipog~tt$nb.dose.curosurf)
 zzp <- beaup(zz$p.value)
@@ -288,7 +301,7 @@ tt |>
  
  
  
-```{r gimf1}
+```{r gimf1, fig.cap= "Doses de surfactant selon la présence d'une IMF"}
 zz <- fisher.test(tt$imf,tt$nb.dose.curosurf)
 zzp <- beaup(zz$p.value)
 titre <- "Doses de surfactant selon la présence d'une IMF"
@@ -326,27 +339,59 @@ tt |>
  
  
 ```{r multi}
-ll <- glm(formula = nb.dose.curosurf ~ corticotherapie.an + cause.de.prematurite + 
+ll <- glm(formula = nb.dose.curosurf ~ corticotherapie.an + cause.prematurite + 
     cut.terme + imf , family = "quasibinomial", data = tt)
 
  tbl_regression(ll,
-    exponentiate = TRUE,
-    pvalue_fun = ~style_pvalue(.x, digits = 2),
-    estimate_fun = ~style_ratio(.x, digits = 2)
-  ) |> 
+    exponentiate = TRUE) |> 
 bold_p() %>%
   bold_labels() |> 
    modify_caption("Facteurs de risque - Analyse multivariée") 
 ```
  
- Aucun des items étudié ne semble influer le nombre de doses de surfactant.
  
 ## Critères secondaires
 
 ### Intervalle entre la dernière dose de corticothérapie
 *Observer l’impact de l’intervalle entre la dernière dose de corticothérapie anténatale et la naissance sur la sévérité de la MMH.*
             
-Donnée manquante.
+
+```{r pinter}
+zz <- chisq.test(tt$intervalle.cortico.accouchement,tt$stade.radio.mmh)
+zzp <- beaup(zz$p.value)
+```
+
+Non significatif (`r zzp`). 
+```{r ginter1, fig.cap= "Stade MMH selon l'intervalle corticoïdes/accouchement"}
+titre <- "Stade MMH selon l'intervalle corticoïdes/accouchement"
+tt |> 
+  dplyr::filter(!is.na(intervalle.cortico.accouchement)) |> 
+  ggplot() +
+  aes(x= intervalle.cortico.accouchement, fill = stade.radio.mmh) +
+  geom_bar(stat = "count", position = "fill") +
+      labs(title = titre,
+         subtitle = zzp,
+         x = "Cause de la prématurité",
+         y = "%",
+         caption = titre,
+         label = "imf1") +
+    theme_light() +
+ scale_fill_lancet() +
+    scale_y_continuous("%", breaks = seq(0,1,0.2),labels = seq(0,100,20)) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      legend.title = element_blank(),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0
+      ),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    )
+```
 
 
 ### Prématurité/MMH
@@ -354,17 +399,17 @@ Donnée manquante.
 *Observer l’influence de la cause de prématurité sur la sévérité de la MMH.*
 
 ```{r pmmh}
-zz <- chisq.test(tt$cause.de.prematurite,tt$stade.radio.mmh)
+zz <- chisq.test(tt$cause.prematurite,tt$stade.radio.mmh)
 zzp <- beaup(zz$p.value)
 ```
 
 Non significatif (`r zzp`). Mais il y a trop de niveaux (tableau 4 * 4) pour l'effectif donc peu fiable.
 
-```{r gmmh1}
+```{r gmmh1, fig.cap= "Stade MMH selon la cause de prématurité"}
 titre <- "Stade MMH selon la cause de prématurité"
 tt |> 
   ggplot() +
-  aes(x= cause.de.prematurite, fill = stade.radio.mmh) +
+  aes(x= cause.prematurite, fill = stade.radio.mmh) +
   geom_bar(stat = "count", position = "fill") +
       labs(title = titre,
          subtitle = zzp,
@@ -400,7 +445,7 @@ zzp <- beaup(zz$p.value)
 ```
 Pas d'influence (`r zzp`).
 
-```{r gantepost}
+```{r gantepost, fig.cap=  "Corticothérapie postnatale vs anténatale"}
 titre <- "Corticothérapie postnatale vs anténatale"
 barouiph(
   tt$corticotherapie.post.natale,
@@ -423,7 +468,7 @@ zzp <- beaup(zz$p.value)
 ```
 Pas d'influence (`r zzp`).
 
-```{r gdbp}
+```{r gdbp, fig.cap= "Dysplasie bronchopulmonaire & corticothérapie anténatale"}
 barouiph(
   tt$dbp,
   tt$corticotherapie.an,
@@ -447,7 +492,7 @@ zzp <- beaup(zz$p.value)
 
 Pas d'influence (`r zzp`).
 
-```{r ghiv}
+```{r ghiv, fig.cap= "Hémorragie intraventriculaire vs corticothérapie anté natale"}
 titre <-"Hémorragie intraventriculaire vs corticothérapie anté natale"
 tt |> 
   dplyr::filter(!is.na(hiv)) |> 
@@ -479,8 +524,70 @@ tt |>
 
 ```
 
+## Demandes diverses hors protocole
 
+Inborn/outborn ?
 
+Pour les différents germes il n'y a pas assez de cas pour faire le moindre calcul.
+
+```{r regroupements}
+tt$mmh_rec <- tt$stade.radio.mmh %>%
+  fct_recode(
+    "MMH 1-2" = "MMH 1",
+    "MMH 1-2" = "MMH 2",
+    "MMH 3-4" = "MMH 3",
+    "MMH 3-4" = "MMH 4"
+  )
+tt$deces <- tt$mode.de.sortie %>%
+  fct_recode(
+    "Vivant" = "Domicile",
+    "Vivant" = "Transfert"
+  )
+```
+
+```{r xtable1}
+  tbl_summary(tt[,c(10,8,9,11,13,3,4,16,17,23,14,36,6)], by = corticotherapie.an) |> 
+    add_p() |>
+  modify_spanning_header(c("stat_1", "stat_2") ~ "Corticoïdes antenatal") |>
+  modify_caption("Tableau 1") |>
+  bold_labels() |>
+  add_overall() %>%
+  bold_p() |>
+  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
+```
+
+```{r xtable3}
+  tbl_summary(tt[,c(9,36,25,7)], by = cause.prematurite) |> 
+    add_p() |>
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3") ~ "Cause de la prématurité") |>
+  modify_caption("Tableau 3") |>
+  bold_labels() |>
+  add_overall() %>%
+  bold_p() |>
+  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
+```
+
+```{r xtable4}
+  tbl_summary(tt[,c(7,36)], by = intervalle.cortico.accouchement) |> 
+    add_p() |>
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3") ~ "intervalle corticoïde/accouchement)") |>
+  modify_caption("Tableau 4") |>
+  bold_labels() |>
+  add_overall() %>%
+  bold_p() |>
+  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
+```
+
+```{r xtable5}
+  tbl_summary(tt[,c(6,27:34,37)], by = corticotherapie.an) |> 
+    add_p() |> 
+  modify_spanning_header(c("stat_1", "stat_2") ~ "Corticoïdes antenataux)") |> 
+  modify_caption("Tableau 5") |>
+  bold_labels() |>
+  add_overall() %>%
+  bold_p() |>
+  as_kable_extra(escape = FALSE, addtl_fmt = TRUE)
+```
 
 ## Technique {.appendix}
 
@@ -488,4 +595,4 @@ Les données discrètes ont été présentés en pourcentage puis comparées par
 
 L'analyse multivarié a été menée en régression logistique. Les conditions d'utilisation d'une loi binomiale (distribution normale des résidus) n'étant pas remplies une loi quasi-binomiale a été utilisée. 
 
-L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy], `lme4` [@lme4] & `epiDisplay` [@epid].
+L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy] & `epiDisplay` [@epid].
